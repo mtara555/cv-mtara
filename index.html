@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Builder - Mohamed TARABET</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root { color-scheme: light; }
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+        html[dir="rtl"] body { font-family: 'Cairo', system-ui, sans-serif; }
+        .font-amiri { font-family: 'Amiri', serif; }
+        .font-cairo { font-family: 'Cairo', sans-serif; }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        
+        /* Themes */
+        .theme-majorelle { --p:#5E2BFF; --pd:#3A0CA3; --a:#FFB700; --bg:#ffffff; --text:#0f172a; --muted:#64748b; --sidebar:#3A0CA3; --sidebar-text:#ffffff; }
+        .theme-casablanca { --p:#09407D; --pd:#062544; --a:#2A9D8F; --bg:#ffffff; --text:#0f172a; --muted:#64748b; --sidebar:#09407D; --sidebar-text:#ffffff; }
+        .theme-atlas { --p:#1B5E20; --pd:#0d3b13; --a:#81C784; --bg:#ffffff; --text:#1a1a1a; --muted:#5a6d5a; --sidebar:#1B5E20; --sidebar-text:#ffffff; }
+        .theme-sahara { --p:#CB5D2F; --pd:#9c451f; --a:#F4A261; --bg:#fffdf8; --text:#3c2a1a; --muted:#8d7966; --sidebar:#9c451f; --sidebar-text:#ffffff; }
+        .theme-rabat { --p:#3182CE; --pd:#2C5282; --a:#63B3ED; --bg:#ffffff; --text:#2D3748; --muted:#718096; --sidebar:#2D3748; --sidebar-text:#ffffff; }
+        .theme-fes { --p:#000000; --pd:#000000; --a:#D4AF37; --bg:#ffffff; --text:#000000; --muted:#666666; --sidebar:#111111; --sidebar-text:#ffffff; }
+        .theme-tangerine { --p:#F77F00; --pd:#D65A00; --a:#7209B7; --bg:#ffffff; --text:#1a1a1a; --muted:#666666; --sidebar:#7209B7; --sidebar-text:#ffffff; }
+        .theme-royal { --p:#C8102E; --pd:#8B0000; --a:#006233; --bg:#ffffff; --text:#1a1a1a; --muted:#555555; --sidebar:#006233; --sidebar-text:#ffffff; }
+
+        /* CV Base */
+        .cv { width: 210mm; min-height: 297mm; margin: 0 auto; background: var(--bg); color: var(--text); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); position: relative; overflow: hidden; }
+        @media (max-width: 1024px) { 
+            .cv { width: 100%; min-height: auto; transform-origin: top center; }
+            #cv-wrapper { padding: 0; }
+        }
+        html[dir="rtl"] .cv { text-align: right; }
+        html[dir="ltr"] .cv { text-align: left; }
+
+        /* Layout 2 - Sidebar */
+        .layout-2 { display: grid; grid-template-columns: 35% 65%; min-height: 297mm; }
+        .layout-2 .sidebar { background: var(--sidebar); color: var(--sidebar-text); padding: 32px 26px; }
+        .layout-2 .main { padding: 32px 30px; background: var(--bg); }
+        html[dir="rtl"] .layout-2 { grid-template-columns: 65% 35%; }
+        html[dir="rtl"] .layout-2 .sidebar { grid-column: 2; grid-row: 1; }
+        html[dir="rtl"] .layout-2 .main { grid-column: 1; grid-row: 1; }
+
+        /* Layout 1 - Classic */
+        .layout-1 .header { background: var(--p); color: white; padding: 36px; text-align: center; }
+        .layout-1 .body { padding: 32px; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 32px; }
+        html[dir="rtl"] .layout-1 .body { grid-template-columns: 0.9fr 1.1fr; }
+        @media(max-width:768px){ .layout-1 .body{grid-template-columns:1fr} }
+
+        /* Layout 3 - Modern */
+        .layout-3 .top { background: linear-gradient(135deg, var(--p), var(--pd)); color: white; padding: 40px; display: flex; gap: 28px; align-items: center; }
+        html[dir="rtl"] .layout-3 .top { flex-direction: row-reverse; }
+        .layout-3 .content { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 36px; padding: 36px; }
+        html[dir="rtl"] .layout-3 .content { grid-template-columns: 0.7fr 1.3fr; }
+        @media(max-width:768px){ .layout-3 .content{grid-template-columns:1fr} .layout-3 .top{flex-direction:column !important; text-align:center} }
+
+        .section-title { font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--p); margin-bottom: 14px; position: relative; padding-bottom: 8px; display: inline-block; }
+        .section-title::after { content: ''; position: absolute; bottom: 0; inset-inline-start: 0; width: 42px; height: 3px; background: var(--a); border-radius: 2px; }
+        .layout-2 .sidebar .section-title, .layout-3 .top .section-title { color: white; }
+        .layout-2 .sidebar .section-title::after, .layout-3 .top .section-title::after { background: rgba(255,255,255,0.7); }
+        html[dir="rtl"] .section-title { letter-spacing: 0; font-family: 'Cairo', sans-serif; font-weight: 800; }
+
+        .timeline-item { margin-bottom: 20px; position: relative; padding-inline-start: 18px; }
+        .timeline-item::before { content: ''; position: absolute; inset-inline-start: 0; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--a); box-shadow: 0 0 0 3px color-mix(in srgb, var(--a) 20%, transparent); }
+        html[dir="rtl"] .timeline-item::before { inset-inline-start: auto; inset-inline-end: 0; }
+
+        .contact-item { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; font-size: 13px; }
+        html[dir="rtl"] .contact-item { flex-direction: row-reverse; }
+
+        .skill-tag { display: inline-block; padding: 5px 12px; margin: 3px; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.2); border-radius: 999px; font-size: 12px; font-weight: 500; backdrop-filter: blur(4px); }
+        .main .skill-tag { background: color-mix(in srgb, var(--p) 10%, transparent); border-color: color-mix(in srgb, var(--p) 20%, transparent); color: var(--pd); }
+
+        .name-ar { font-family: 'Amiri', serif; font-size: 26px; font-weight: 700; line-height: 1.2; }
+        html[dir="ltr"] .name-ar { margin-top: 2px; opacity: 0.95; }
+        html[dir="rtl"] .name-ar { margin-bottom: 4px; }
+
+        input, textarea, select { transition: all 0.2s; }
+        input:focus, textarea:focus, select:focus { outline: none; ring: 2px; ring-color: var(--p); border-color: var(--p); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p) 15%, transparent); }
+    </style>
+</head>
+<body class="bg-[#f8fafc] min-h-screen">
+    <!-- Lang Toggle -->
+    <button id="lang-toggle" class="fixed top-4 z-[100] px-5 py-2.5 rounded-full bg-gradient-to-r from-[#5E2BFF] to-[#3A0CA3] text-white text-sm font-semibold shadow-lg shadow-violet-500/20 hover:shadow-xl hover:shadow-violet-500/30 transition-all hover:-translate-y-0.5" style="inset-inline-end: 1rem;">
+        FR ⇄ العربية
+    </button>
+
+    <header class="sticky top-0 z-40 backdrop-blur-xl bg-white/70 border-b border-gray-200/60">
+        <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-blue-700 flex items-center justify-center text-white font-bold shadow-md">MT</div>
+                <div>
+                    <h1 class="text-[17px] font-bold leading-none text-gray-900" data-i18n="appTitle">CV Builder Maroc</h1>
+                    <p class="text-[11px] text-gray-500 -mt-0.5">Mohamed TARABET</p>
+                </div>
+            <div class="flex items-center gap-2">
+                <button id="export" class="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-black transition">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                    <span data-i18n="export">Exporter PDF</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-[1600px] mx-auto p-4 lg:p-6">
+        <div class="grid lg:grid-cols-5 gap-6 items-start">
+            <!-- Builder -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-[20px] shadow-sm border border-gray-200/70">
+                    <div class="p-5 space-y-5 max-h-[calc(100vh-8rem)] overflow-y-auto">
+                        <!-- Theme & Layout -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs font-semibold text-gray-700 mb-1.5 block" data-i18n="theme">Thème</label>
+                                <select id="theme" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:border-violet-500">
+                                    <option value="theme-majorelle">🇲🇦 Maroc Majorelle</option>
+                                    <option value="theme-casablanca">Casablanca Blue</option>
+                                    <option value="theme-atlas">Atlas Vert</option>
+                                    <option value="theme-sahara">Sahara Terracotta</option>
+                                    <option value="theme-rabat">Rabat Pro</option>
+                                    <option value="theme-fes">Fès Noir & Or</option>
+                                    <option value="theme-tangerine">Tangerine</option>
+                                    <option value="theme-royal">Royal Maroc</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-700 mb-1.5 block" data-i18n="layout">Mise en page</label>
+                                <select id="layout" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:border-violet-500">
+                                    <option value="layout-2">Sidebar</option>
+                                    <option value="layout-1">Classique</option>
+                                    <option value="layout-3">Moderne</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Personal -->
+                        <div class="pt-1">
+                            <h3 class="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-lg bg-violet-100 text-violet-700 grid place-items-center">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                </span>
+                                <span data-i18n="personal">Informations Personnelles</span>
+                            </h3>
+                            <div class="space-y-2.5">
+                                <input data-field="name" id="inp-name" class="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm" data-i18n-placeholder="fullName" placeholder="Nom complet">
+                                <input data-field="name_ar" id="inp-name-ar" dir="rtl" class="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-amiri" placeholder="محمد ترابت">
+                                <input data-field="title" id="inp-title" class="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm" data-i18n-placeholder="jobTitle" placeholder="Intitulé du poste">
+                                <div class="grid grid-cols-2 gap-2.5">
+                                    <input data-field="email" class="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm" data-i18n-placeholder="email" placeholder="Email">
+                                    <input data-field="phone" class="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm" data-i18n-placeholder="phone" placeholder="Téléphone">
+                                </div>
+                                <input data-field="location" class="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm" data-i18n-placeholder="location" placeholder="Ville, Pays">
+                                <textarea data-field="summary" rows="3" class="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm resize-none" data-i18n-placeholder="summary" placeholder="Résumé professionnel"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Experience -->
+                        <div>
+                            <h3 class="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 grid place-items-center">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                                </span>
+                                <span data-i18n="experience">Expériences Professionnelles</span>
+                            </h3>
+                            <div class="space-y-3" id="exp-fields">
+                                <div class="p-3.5 border border-gray-200 rounded-xl bg-gray-50/50">
+                                    <input data-exp="0" data-key="post" class="w-full bg-transparent font-medium text-sm mb-1.5 outline-none" data-i18n-placeholder="expPost" placeholder="Poste">
+                                    <input data-exp="0" data-key="company" class="w-full bg-transparent text-[13px] text-gray-600 mb-1 outline-none" data-i18n-placeholder="expCompany" placeholder="Entreprise">
+                                    <input data-exp="0" data-key="date" class="w-full bg-transparent text-[12px] text-gray-500 mb-1.5 outline-none" data-i18n-placeholder="expDate" placeholder="Période">
+                                    <textarea data-exp="0" data-key="desc" rows="2" class="w-full bg-transparent text-[13px] resize-none outline-none" data-i18n-placeholder="expDesc" placeholder="Description"></textarea>
+                                </div>
+                                <div class="p-3.5 border border-gray-200 rounded-xl bg-gray-50/50">
+                                    <input data-exp="1" data-key="post" class="w-full bg-transparent font-medium text-sm mb-1.5 outline-none" data-i18n-placeholder="expPost" placeholder="Poste">
+                                    <input data-exp="1" data-key="company" class="w-full bg-transparent text-[13px] text-gray-600 mb-1 outline-none" data-i18n-placeholder="expCompany" placeholder="Entreprise">
+                                    <input data-exp="1" data-key="date" class="w-full bg-transparent text-[12px] text-gray-500 mb-1.5 outline-none" data-i18n-placeholder="expDate" placeholder="Période">
+                                    <textarea data-exp="1" data-key="desc" rows="2" class="w-full bg-transparent text-[13px] resize-none outline-none" data-i18n-placeholder="expDesc" placeholder="Description"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Education -->
+                        <div>
+                            <h3 class="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
+                                </span>
+                                <span data-i18n="education">Formation</span>
+                            </h3>
+                            <div class="space-y-3">
+                                <div class="p-3.5 border border-gray-200 rounded-xl bg-gray-50/50">
+                                    <input data-edu="0" data-key="degree" class="w-full bg-transparent font-medium text-sm mb-1 outline-none" data-i18n-placeholder="eduDegree" placeholder="Diplôme">
+                                    <input data-edu="0" data-key="school" class="w-full bg-transparent text-[13px] text-gray-600 mb-1 outline-none" data-i18n-placeholder="eduSchool" placeholder="École">
+                                    <input data-edu="0" data-key="date" class="w-full bg-transparent text-[12px] text-gray-500 outline-none" data-i18n-placeholder="eduDate" placeholder="Années">
+                                </div>
+                                <div class="p-3.5 border border-gray-200 rounded-xl bg-gray-50/50">
+                                    <input data-edu="1" data-key="degree" class="w-full bg-transparent font-medium text-sm mb-1 outline-none" data-i18n-placeholder="eduDegree" placeholder="Diplôme">
+                                    <input data-edu="1" data-key="school" class="w-full bg-transparent text-[13px] text-gray-600 mb-1 outline-none" data-i18n-placeholder="eduSchool" placeholder="École">
+                                    <input data-edu="1" data-key="date" class="w-full bg-transparent text-[12px] text-gray-500 outline-none" data-i18n-placeholder="eduDate" placeholder="Années">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Skills -->
+                        <div>
+                            <h3 class="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 grid place-items-center">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                </span>
+                                <span data-i18n="skills">Compétences</span>
+                            </h3>
+                            <input data-field="skills" class="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm" data-i18n-placeholder="skillsPlaceholder" placeholder="React, Node.js, TypeScript...">
+                            <input data-field="langs" class="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm mt-2.5" data-i18n-placeholder="langsPlaceholder" placeholder="Arabe, Français, Anglais...">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview -->
+            <div class="lg:col-span-3">
+                <div class="sticky top-[88px]">
+                    <div id="cv-wrapper" class="w-full overflow-auto max-h-[calc(100vh-6rem)] rounded-[20px]">
+                        <div id="cv" class="cv theme-majorelle layout-2">
+                            <!-- Rendered by JS -->
+                        </div>
+                    </div>
+                    <div class="flex justify-center mt-4 lg:hidden">
+                        <button id="export-mobile" class="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium">
+                            <span data-i18n="export">Exporter PDF</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+<script>
+const translations = {
+    fr: {
+        appTitle: "CV Builder Maroc",
+        personal: "Informations Personnelles",
+        experience: "Expériences Professionnelles",
+        education: "Formation",
+        skills: "Compétences",
+        languages: "Langues",
+        profile: "Profil",
+        export: "Exporter PDF",
+        theme: "Thème",
+        layout: "Mise en page",
+        fullName: "Nom complet",
+        jobTitle: "Intitulé du poste",
+        email: "Email",
+        phone: "Téléphone",
+        location: "Ville, Pays",
+        summary: "Résumé professionnel",
+        expPost: "Poste",
+        expCompany: "Entreprise",
+        expDate: "Période (ex: 2022 - Présent)",
+        expDesc: "Description des missions",
+        eduDegree: "Diplôme",
+        eduSchool: "École / Université",
+        eduDate: "Années",
+        skillsPlaceholder: "React, Node.js, TypeScript...",
+        langsPlaceholder: "Arabe, Français, Anglais..."
+    },
+    ar: {
+        appTitle: "منشئ السيرة الذاتية",
+        personal: "المعلومات الشخصية",
+        experience: "الخبرات المهنية",
+        education: "التكوين الأكاديمي",
+        skills: "المهارات",
+        languages: "اللغات",
+        profile: "الملف الشخصي",
+        export: "تصدير PDF",
+        theme: "المظهر",
+        layout: "التخطيط",
+        fullName: "الاسم الكامل",
+        jobTitle: "المسمى الوظيفي",
+        email: "البريد الإلكتروني",
+        phone: "رقم الهاتف",
+        location: "المدينة، البلد",
+        summary: "ملخص مهني",
+        expPost: "المنصب",
+        expCompany: "الشركة",
+        expDate: "الفترة (مثال: 2022 - الآن)",
+        expDesc: "وصف المهام",
+        eduDegree: "الشهادة",
+        eduSchool: "المدرسة / الجامعة",
+        eduDate: "السنوات",
+        skillsPlaceholder: "React، Node.js، TypeScript...",
+        langsPlaceholder: "العربية، الفرنسية، الإنجليزية..."
+    }
+};
+
+const defaultData = {
+    fr: {
+        name: "Mohamed TARABET",
+        name_ar: "محمد ترابت",
+        title: "Développeur Full Stack | Expert React & Node.js",
+        email: "mohamed.tarabet@email.com",
+        phone: "+212 6 12 34 56 78",
+        location: "Casablanca, Maroc",
+        summary: "Développeur passionné avec 5+ ans d'expérience dans la création d'applications web performantes et scalables. Expert en architecture moderne, je transforme des idées complexes en solutions élégantes. Spécialisé dans l'écosystème JavaScript et les interfaces utilisateur premium.",
+        experiences: [
+            { post: "Lead Développeur Frontend", company: "Atlas Digital • Casablanca", date: "2022 - Présent", desc: "Direction technique d'une équipe de 4 développeurs. Migration complète vers Next.js 14, amélioration des performances de 40% et mise en place d'un design system." },
+            { post: "Développeur Full Stack", company: "Sahara Tech • Rabat", date: "2020 - 2022", desc: "Conception et développement d'APIs REST avec Node.js et d'applications React pour des clients e-commerce. Mise en place CI/CD et architecture microservices." }
+        ],
+        educations: [
+            { degree: "Master Génie Logiciel", school: "ENSIAS • Rabat", date: "2018 - 2020" },
+            { degree: "Licence Informatique", school: "Université Hassan II • Casablanca", date: "2015 - 2018" }
+        ],
+        skills: "React, Next.js, TypeScript, Node.js, Tailwind CSS, PostgreSQL, Docker, Figma, Git",
+        langs: "Arabe (natif), Français (courant), Anglais (professionnel)"
+    },
+    ar: {
+        name: "Mohamed TARABET",
+        name_ar: "محمد ترابت",
+        title: "مطور Full Stack | خبير React و Node.js",
+        email: "mohamed.tarabet@email.com",
+        phone: "‎+212 6 12 34 56 78",
+        location: "الدار البيضاء، المغرب",
+        summary: "مطور شغوف بخبرة تزيد عن 5 سنوات في بناء تطبيقات ويب عالية الأداء وقابلة للتطوير. خبير في البنى الحديثة، أحول الأفكار المعقدة إلى حلول أنيقة. متخصص في منظومة JavaScript وواجهات المستخدم الاحترافية.",
+        experiences: [
+            { post: "قائد تطوير الواجهة الأمامية", company: "أطلس ديجيتال • الدار البيضاء", date: "2022 - الآن", desc: "قيادة فريق من 4 مطورين. ترحيل كامل إلى Next.js 14، تحسين الأداء بنسبة 40٪ وإنشاء نظام تصميم موحد." },
+            { post: "مطور Full Stack", company: "صحراء تك • الرباط", date: "2020 - 2022", desc: "تصميم وتطوير واجهات REST API باستخدام Node.js وتطبيقات React لعملاء التجارة الإلكترونية. إعداد CI/CD وبنية الخدمات المصغرة." }
+        ],
+        educations: [
+            { degree: "ماستر هندسة البرمجيات", school: "المدرسة الوطنية العليا للمعلوميات • الرباط", date: "2018 - 2020" },
+            { degree: "إجازة في المعلوميات", school: "جامعة الحسن الثاني • الدار البيضاء", date: "2015 - 2018" }
+        ],
+        skills: "React, Next.js, TypeScript, Node.js, Tailwind CSS, PostgreSQL, Docker, Figma, Git",
+        langs: "العربية (لغة أم)، الفرنسية (بطلاقة)، الإنجليزية (مهني)"
+    }
+};
+
+let cvData = {
+    fr: JSON.parse(JSON.stringify(defaultData.fr)),
+    ar: JSON.parse(JSON.stringify(defaultData.ar))
+};
+
+function getLang() { return document.documentElement.dir === 'rtl' ? 'ar' : 'fr'; }
+
+function setLanguage(lang) {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    localStorage.setItem('cv-dir', lang);
+    
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.dataset.i18n;
+        if (translations[lang][key]) el.textContent = translations[lang][key];
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.dataset.i18nPlaceholder;
+        if (translations[lang][key]) el.placeholder = translations[lang][key];
+    });
+    
+    populateForm(lang);
+    renderCV();
+}
+
+function populateForm(lang) {
+    const d = cvData[lang];
+    document.querySelectorAll('[data-field]').forEach(el => {
+        el.value = d[el.dataset.field] || '';
+    });
+    document.querySelectorAll('[data-exp]').forEach(el => {
+        const i = +el.dataset.exp;
+        const k = el.dataset.key;
+        el.value = d.experiences[i]?.[k] || '';
+    });
+    document.querySelectorAll('[data-edu]').forEach(el => {
+        const i = +el.dataset.edu;
+        const k = el.dataset.key;
+        el.value = d.educations[i]?.[k] || '';
+    });
+}
+
+function renderCV() {
+    const lang = getLang();
+    const d = cvData[lang];
+    const t = translations[lang];
+    const cv = document.getElementById('cv');
+    const layout = document.getElementById('layout').value;
+    const theme = document.getElementById('theme').value;
+    
+    cv.className = `cv ${theme} ${layout}`;
+    
+    const skillsHTML = d.skills.split(',').map(s => `<span class="skill-tag">${s.trim()}</span>`).join('');
+    const langsHTML = d.langs.split(',').map(l => `<div class="mb-1.5">${l.trim()}</div>`).join('');
+    
+    const expHTML = d.experiences.map(exp => `
+        <div class="timeline-item">
+            <div class="flex justify-between items-baseline gap-3 flex-wrap">
+                <h4 class="font-bold text-[15px] leading-snug">${exp.post}</h4>
+                <span class="text-[12px] px-2.5 py-1 rounded-full bg-[var(--p)]/10 text-[var(--pd)] font-medium whitespace-nowrap">${exp.date}</span>
+            </div>
+            <div class="text-[13px] font-semibold text-[var(--p)] mt-0.5">${exp.company}</div>
+            <p class="text-[13.5px] text-gray-600 leading-relaxed mt-1.5">${exp.desc}</p>
+        </div>
+    `).join('');
+    
+    const eduHTML = d.educations.map(edu => `
+        <div class="timeline-item">
+            <div class="flex justify-between items-baseline gap-2">
+                <h4 class="font-semibold text-[14px]">${edu.degree}</h4>
+                <span class="text-[11px] text-[var(--muted)]">${edu.date}</span>
+            </div>
+            <div class="text-[13px] text-gray-600">${edu.school}</div>
+        </div>
+    `).join('');
+    
+    const contactHTML = `
+        <div class="contact-item">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <span>${d.email}</span>
+        </div>
+        <div class="contact-item">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            <span dir="ltr">${d.phone}</span>
+        </div>
+        <div class="contact-item">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span>${d.location}</span>
+        </div>
+    `;
+    
+    if (layout === 'layout-2') {
+        cv.innerHTML = `
+            <aside class="sidebar">
+                <div class="text-center mb-8">
+                    <div class="w-[88px] h-[88px] mx-auto rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center text-[32px] font-black mb-4 shadow-lg">MT</div>
+                    <h1 class="text-[26px] font-extrabold leading-tight tracking-tight">${d.name}</h1>
+                    <div class="name-ar">${d.name_ar}</div>
+                    <p class="text-[13px] leading-snug mt-2.5 opacity-90 font-medium">${d.title}</p>
+                </div>
+                
+                <div class="space-y-7">
+                    <div>
+                        <h3 class="section-title">${t.personal}</h3>
+                        <div class="mt-3 space-y-1">${contactHTML}</div>
+                    </div>
+                    <div>
+                        <h3 class="section-title">${t.skills}</h3>
+                        <div class="mt-3 flex flex-wrap">${skillsHTML}</div>
+                    </div>
+                    <div>
+                        <h3 class="section-title">${t.languages}</h3>
+                        <div class="mt-3 text-[13px] leading-relaxed opacity-95">${langsHTML}</div>
+                    </div>
+                </div>
+            </aside>
+            <main class="main">
+                <section class="mb-8">
+                    <h3 class="section-title">${t.profile}</h3>
+                    <p class="text-[14px] leading-[1.7] text-gray-700 mt-3">${d.summary}</p>
+                </section>
+                <section class="mb-8">
+                    <h3 class="section-title">${t.experience}</h3>
+                    <div class="mt-4">${expHTML}</div>
+                </section>
+                <section>
+                    <h3 class="section-title">${t.education}</h3>
+                    <div class="mt-4">${eduHTML}</div>
+                </section>
+            </main>
+        `;
+    } else if (layout === 'layout-1') {
+        cv.innerHTML = `
+            <div class="header">
+                <h1 class="text-[32px] font-black tracking-tight">${d.name}</h1>
+                <div class="name-ar opacity-90">${d.name_ar}</div>
+                <p class="text-[15px] mt-2 font-medium opacity-95">${d.title}</p>
+                <div class="flex flex-wrap justify-center gap-x-5 gap-y-1 mt-4 text-[13px] opacity-90">
+                    <span>${d.email}</span>
+                    <span>•</span>
+                    <span dir="ltr">${d.phone}</span>
+                    <span>•</span>
+                    <span>${d.location}</span>
+                </div>
+            </div>
+            <div class="body">
+                <div>
+                    <section class="mb-7">
+                        <h3 class="section-title">${t.profile}</h3>
+                        <p class="text-[14px] leading-[1.7] text-gray-700 mt-3">${d.summary}</p>
+                    </section>
+                    <section>
+                        <h3 class="section-title">${t.experience}</h3>
+                        <div class="mt-4">${expHTML}</div>
+                    </section>
+                </div>
+                <div>
+                    <section class="mb-7">
+                        <h3 class="section-title">${t.skills}</h3>
+                        <div class="mt-3 flex flex-wrap gap-1.5">${d.skills.split(',').map(s=>`<span class="px-3 py-1.5 rounded-full text-xs font-medium" style="background:color-mix(in srgb, var(--p) 10%, transparent); color:var(--pd)">${s.trim()}</span>`).join('')}</div>
+                    </section>
+                    <section class="mb-7">
+                        <h3 class="section-title">${t.education}</h3>
+                        <div class="mt-4">${eduHTML}</div>
+                    </section>
+                    <section>
+                        <h3 class="section-title">${t.languages}</h3>
+                        <div class="mt-3 text-[13.5px] space-y-1">${langsHTML}</div>
+                    </section>
+                </div>
+            </div>
+        `;
+    } else {
+        cv.innerHTML = `
+            <div class="top">
+                <div class="w-[100px] h-[100px] rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center text-[36px] font-black shrink-0 shadow-xl">MT</div>
+                <div class="flex-1">
+                    <h1 class="text-[30px] font-black leading-none">${d.name}</h1>
+                    <div class="name-ar mt-1">${d.name_ar}</div>
+                    <p class="text-[15px] mt-2.5 opacity-95 font-medium">${d.title}</p>
+                    <div class="flex flex-wrap gap-4 mt-3 text-[13px] opacity-90">${contactHTML}</div>
+                </div>
+            </div>
+            <div class="content">
+                <div>
+                    <section class="mb-8">
+                        <h3 class="section-title">${t.profile}</h3>
+                        <p class="text-[14px] leading-[1.7] text-gray-700 mt-3">${d.summary}</p>
+                    </section>
+                    <section>
+                        <h3 class="section-title">${t.experience}</h3>
+                        <div class="mt-4">${expHTML}</div>
+                    </section>
+                </div>
+                <div>
+                    <section class="mb-8">
+                        <h3 class="section-title">${t.skills}</h3>
+                        <div class="mt-3 flex flex-wrap gap-1.5">${d.skills.split(',').map(s=>`<span class="px-3 py-1.5 rounded-full text-xs font-medium" style="background:color-mix(in srgb, var(--p) 10%, transparent); color:var(--pd)">${s.trim()}</span>`).join('')}</div>
+                    </section>
+                    <section class="mb-8">
+                        <h3 class="section-title">${t.education}</h3>
+                        <div class="mt-4">${eduHTML}</div>
+                    </section>
+                    <section>
+                        <h3 class="section-title">${t.languages}</h3>
+                        <div class="mt-3 text-[13.5px] space-y-1">${langsHTML}</div>
+                    </section>
+                </div>
+            </div>
+        `;
+    }
+}
+
+function exportPDF() {
+    const cv = document.getElementById('cv');
+    const lang = getLang();
+    const opt = {
+        margin: 0,
+        filename: `CV_Mohamed_TARABET_${lang.toUpperCase()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2.5, useCORS: true, scrollY: 0 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    document.body.classList.add('printing');
+    html2pdf().set(opt).from(cv).save().then(() => {
+        document.body.classList.remove('printing');
+    });
+}
+
+// Events
+document.getElementById('lang-toggle').addEventListener('click', () => {
+    setLanguage(getLang() === 'fr' ? 'ar' : 'fr');
+});
+
+document.getElementById('theme').addEventListener('change', renderCV);
+document.getElementById('layout').addEventListener('change', renderCV);
+document.getElementById('export').addEventListener('click', exportPDF);
+document.getElementById('export-mobile')?.addEventListener('click', exportPDF);
+
+document.querySelectorAll('[data-field]').forEach(el => {
+    el.addEventListener('input', e => {
+        cvData[getLang()][e.target.dataset.field] = e.target.value;
+        renderCV();
+    });
+});
+
+document.querySelectorAll('[data-exp]').forEach(el => {
+    el.addEventListener('input', e => {
+        const i = +e.target.dataset.exp;
+        const k = e.target.dataset.key;
+        cvData[getLang()].experiences[i][k] = e.target.value;
+        renderCV();
+    });
+});
+
+document.querySelectorAll('[data-edu]').forEach(el => {
+    el.addEventListener('input', e => {
+        const i = +e.target.dataset.edu;
+        const k = e.target.dataset.key;
+        cvData[getLang()].educations[i][k] = e.target.value;
+        renderCV();
+    });
+});
+
+// Init
+const savedDir = localStorage.getItem('cv-dir') || 'fr';
+setLanguage(savedDir);
+document.getElementById('theme').value = 'theme-majorelle';
+document.getElementById('layout').value = 'layout-2';
+renderCV();
+</script>
+</body>
+</html>
